@@ -1,4 +1,16 @@
+# Investigating insight and rigour as separate constructs in mathematical proof
+
 Data and analysis code for the project on insight vs rigour.
+
+> In this paper we investigate undergraduate mathematics students' conceptions of rigour and insight.
+> We conducted comparative judgement experiments in which students were asked to judge different proofs of the same theorem with five separate criteria: rigour, insight, understanding, simplicity and assessment marks.
+> We predicted, and our experiment found, that rigour is a reliable construct.
+> We predicted that insight is also a reliable construct but asking students to judge on the basis of ``which proof gives you more insight into why a theorem is true'' did not result in a reliable judging scale.
+> Our analysis suggests two distinct dimensions: rigour and marks contribute to one factor whereas simplicity and personal understanding relate to a second factor.
+> We suggest three reasons why insight was related almost equally to both factors.
+> First, while comparative judgement was suitable for assessing some aesthetic criteria it may not be suited to investigating students conceptions of insight.
+> Second, students may not have developed an aesthetic sense in which they appreciate insight in ways which are regularly discussed by mathematics educators.
+> Lastly, insight may not be a coherent and well-defined construct after all.
 
 ## Data
 Raw data is stored in these folders:
