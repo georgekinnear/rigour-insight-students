@@ -1,0 +1,412 @@
+---
+title: "Proof CJ: Study 2 analysis"
+author: "George Kinnear"
+date: "22/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/05-study2-analysis/')
+
+# for plotting
+library(ggrepel)
+source("functions_for_plotting.R")
+theme_set(theme_minimal())
+library(patchwork)
+
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+
+# For the Bayesian stuff
+library(bayestestR)
+library(insight)
+library(BayesFactor)
+ci_width <- 0.95
+set.seed(22032021)
+```
+
+
+```{r echo=FALSE, fig.height=1, fig.width=8, message=FALSE}
+btm_estimates <- read_csv("data-out/btm_estimates.csv") %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  filter(study == "study2") %>% 
+  select(-study)
+
+proof_details <- read_csv("proof-details.csv")
+
+proofs_legend_content <- proof_details %>% 
+  mutate(proof_name = str_glue("{proof}. {proof_name}")) %>% 
+  mutate(proof_name = fct_reorder(proof_name, proof))
+
+# Legend showing the names of the proofs
+proofs_legend_plot <- proofs_legend_content  %>% 
+  ggplot(aes(x = proof, y = proof)) +
+  geom_text(aes(colour = proof_name, label = proof_name),
+            show.legend = TRUE,
+            key_glyph = draw_key_blank) +
+  guides(colour = guide_legend(
+    title = "",
+    ncol = 5,
+    byrow = FALSE,
+    override.aes = aes(label = "")
+  )) +
+  theme(legend.key.width = unit(0, "cm"), legend.box.margin = margin(6, 6, 6, 6))
+
+proofs_legend <- proofs_legend_plot %>% ggpubr::get_legend() %>% ggpubr::as_ggplot()
+proofs_legend
+ggsave("figs/FIG_study2-proofs-legend.pdf", width = 22, height = 3, units = "cm")
+```
+
+# Basic plots of the scales
+
+The scale values with standard errors:
+
+```{r}
+btm_estimates %>% 
+  filter(!dimension %in% c("words", "string_length")) %>%
+  group_by(dimension) %>% 
+  arrange(theta) %>% 
+  mutate(order = row_number()) %>% 
+  ggplot(aes(x = order, y = theta, ymin = theta - se, ymax = theta + se)) +
+  geom_hline(yintercept = 0, colour = "grey") +
+  geom_pointrange(size = 0.25) +
+  geom_text_repel(aes(label = proof), box.padding = 0.3, min.segment.length = 0.5, colour = "#777777") +
+  facet_grid(cols = vars(dimension), scales = "free") +
+  theme(
+    axis.text.x = element_blank(),
+    strip.text.x = element_text(size = 12, face = "bold"),
+  ) +
+  labs(x = "")
+ggsave("figs/FIG_study2-thetas-samescale.pdf", width = 25, height = 10, units = "cm")
+
+plot_thetas <- btm_estimates %>% 
+  filter(!dimension %in% c("words", "string_length")) %>%
+  group_by(dimension) %>% 
+  arrange(theta) %>% 
+  mutate(order = row_number()) %>% 
+  ggplot(aes(x = order, y = theta, ymin = theta - se, ymax = theta + se)) +
+  geom_hline(yintercept = 0, colour = "grey") +
+  geom_pointrange(size = 0.25) +
+  geom_text_repel(aes(label = proof), box.padding = 0.3, min.segment.length = 0.5, colour = "#777777", size = 3) +
+  facet_wrap(facets = vars(dimension), scales = "free", ncol = 5) +
+  theme(
+    axis.text.x = element_blank(),
+    strip.text.x = element_text(size = 12, face = "bold"),
+  ) +
+  labs(x = "")
+(plot_thetas) / proofs_legend + 
+  plot_layout(widths = c(1, 1), heights = unit(c(7, 2), c('cm', 'cm')))
+ggsave("figs/FIG_study2-thetas.pdf", width = 22, height = 11, units = "cm")
+```
+
+
+```{r}
+# Assemble data
+alldims_theta_se <- btm_estimates %>% 
+  rbind(
+    proof_details %>% 
+      select(proof, words, string_length) %>% 
+      pivot_longer(
+        cols = c("words", "string_length"),
+        names_to = "dimension",
+        values_to = "theta"
+      ) %>% 
+      mutate(se = 0)
+  )
+
+crossdims <- alldims_theta_se %>% 
+  left_join(alldims_theta_se, by = "proof", suffix = c("_x", "_y")) %>% 
+  filter(dimension_x != dimension_y)
+```
+
+
+# Bayesian stats
+
+```{r}
+dimensions_tbl <- tibble(dimension = c(dimensions_sorted, "words", "string_length")) %>% mutate(n = row_number())
+upper_triang <- dimensions_tbl %>% 
+  rename(dimension_y = dimension, n_y = n) %>% 
+  crossing(dimensions_tbl) %>% 
+  rename(dimension_x = dimension, n_x = n) %>% 
+  filter(n_x > n_y) %>% 
+  arrange(n_y, n_x) %>% 
+  select(contains("dimension"))
+
+crossdims_upper_triangular <- crossdims %>%
+ semi_join(upper_triang, by = c("dimension_x", "dimension_y"))
+
+# Bayes factor interpretations from van Doorn et al. (2020) https://doi.org/10.3758/s13423-020-01798-5
+vandoorn2020 <- effectsize::rules(c(3, 30), c("weak", "moderate", "strong"))
+# pick colours for these - avoiding the extremes of the scale, which are too dark
+bayes_interp_cols = colorspace::diverging_hcl(8, "Green-Brown")[2:7]
+names(bayes_interp_cols) = c("strong in favour of",
+                             "moderate in favour of",
+                             "weak in favour of",
+                             "weak against",
+                             "moderate against",
+                             "strong against")
+```
+
+Do a Bayesian correlation test on each combination, and describe the resulting posteriors.
+
+```{r}
+bayes_corrs <- crossdims_upper_triangular %>%
+  group_by(dimension_x, dimension_y) %>%
+  nest() %>%
+  # This step does the Bayesian test.
+  # rscale = "ultrawide" specifies uniform (i.e. Beta(1,1)) priors
+  mutate(
+    model = map(
+      data,
+      ~ BayesFactor::correlationBF(.$theta_x, .$theta_y, rscale = "ultrawide")
+    ),
+    posterior = map(model, ~ bayestestR::describe_posterior(., ci = ci_width))
+  ) %>%
+  select(`dimension_x`, `dimension_y`, posterior) %>%
+  unnest(cols = c(posterior)) %>%
+  arrange(-BF) %>%
+  # interpret Bayes factors in line with van Doorn et al. (2020) https://doi.org/10.3758/s13423-020-01798-5
+  mutate(interpretation = effectsize::interpret_bf(BF, rules = vandoorn2020)) %>%
+  mutate(interpretation = str_replace(interpretation, "evidence ", "")) %>%
+  mutate(interpretation = factor(interpretation, levels = names(bayes_interp_cols)))
+  
+  
+coef_table <- bayes_corrs %>% 
+  relocate(interpretation, BF) %>% 
+  mutate(hdi = paste0("[", round(CI_low, 2), ", ", round(CI_high, 2), "]")) %>%
+  #filter(!dimension_x %in% c("string_length", "words"))
+  identity()
+
+coef_table %>%
+  select(interpretation,
+         BF,
+         contains("dimension"),
+         Median,
+         hdi) %>%
+  mutate(Visualisation = "") %>%
+  kbl(
+    booktabs = T,
+    digits = 2,
+    col.names = c(
+      "Interpretation",
+      "BF",
+      "Dimension 1",
+      "Dimension 2",
+      "Median",
+      paste0(0.95 * 100, "% HDI"),
+      "Visualisation"
+    )
+  ) %>%
+  kable_styling(
+    bootstrap_options = "striped",
+    full_width = F,
+    position = "left"
+  ) %>%
+  column_spec(
+    7,
+    image = spec_pointrange(
+      x = coef_table$Median,
+      xmin = coef_table$CI_low,
+      xmax = coef_table$CI_high,
+      vline = 0,
+      cex = 0.5
+    )
+  ) %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+This shows there is no evidence of the string/word length correlating with the scales, and that there is a reasonable correlation between the scales.
+
+Here is the detail on the correlation between judging scales:
+
+```{r}
+coef_table %>%
+  filter(!dimension_x %in% c("string_length", "words")) %>%
+  ungroup() %>%
+  select(starts_with("dimension"), Median, hdi, BF, interpretation) %>%
+  mutate(
+    interpretation = paste(interpretation),
+    # hack! to convert it to a string
+    interpretation = if_else(
+      lag(interpretation, n = 1) == (interpretation),
+      "",
+      interpretation,
+      interpretation
+    )
+  ) %>%
+  kbl(
+    booktabs = T,
+    digits = 2,
+    col.names = c(
+      "Dimension 1",
+      "Dimension 2",
+      "Median",
+      paste0(ci_width * 100, "% HDI"),
+      "BF",
+      "Interpretation"
+    )
+  ) %>%
+  kable_styling(full_width = F,
+                position = "left")
+```
+
+## Correlation summary plot
+
+```{r}
+# This is based on frequentist stats, but we can hack it to use our Bayesian numbers
+library(corrplot)
+
+dimensions_corr_order = c("marks", "rigour", "insight", "understanding", "simple")
+
+just_corrs = coef_table %>% 
+  filter(!dimension_x %in% c("string_length", "words")) %>%
+  ungroup() %>%
+  select(starts_with("dimension"), Median)
+
+M = just_corrs %>%
+  right_join(
+    crossing(dimension_x = dimensions_sorted,
+             dimension_y = dimensions_sorted),
+    by = c("dimension_x", "dimension_y")
+  ) %>%
+  # add on the mirror image over the diagonal
+  left_join(
+    just_corrs %>% rename(tmp = dimension_x, dimension_x = dimension_y) %>% rename(dimension_y = tmp),
+    by = c("dimension_x", "dimension_y")
+  ) %>%
+  # consolidate the Median columns, and fill in the diagonal with 1's
+  mutate(Median = coalesce(Median.x, Median.y, 1), .keep = "unused") %>%
+  # reshape and put the rows/cols in the right order
+  pivot_wider(names_from = dimension_y,
+              values_from = Median) %>%
+  arrange(factor(dimension_x, levels = dimensions_sorted)) %>%
+  relocate(all_of(dimensions_sorted)) %>%
+  column_to_rownames(var = "dimension_x") %>%
+  mutate(across(everything(), ~ replace_na(., 0))) %>%
+  as.matrix()
+
+pdf(file = "figs/FIG_study2-corrplot.pdf")
+corrplot(M,
+         type="upper",
+         method = "square",
+         order = "AOE",
+         tl.col="black", tl.srt=0, 
+         addCoef.col = "black", # Add coefficient of correlation
+         diag = FALSE,
+         col = rev(bayes_interp_cols),
+         #p.mat = p.mat, sig.level = 0.005, # testing 10 correlations, so use alpha = 0.05 / 10
+         #insig = "blank"
+         )
+dev.off()
+corrplot(M,
+         type="upper",
+         method = "square",
+         order = "AOE",
+         tl.col="black", tl.srt=0, 
+         addCoef.col = "black", # Add coefficient of correlation
+         diag = FALSE,
+         col = rev(bayes_interp_cols),
+         #p.mat = p.mat, sig.level = 0.005, # testing 10 correlations, so use alpha = 0.05 / 10
+         #insig = "blank"
+         )
+```
+
+
+## Summary plots
+
+```{r fig.height=10, fig.width=10, warning=FALSE}
+plot_bayes_corr_grid(crossdims_upper_triangular, bayes_corrs)
+ggsave("figs/FIG_study2-correlation-summary-bayes-full.pdf", width = 27, height = 20, units = "cm")
+```
+
+```{r, warning=FALSE}
+plot_bayes_corr_grid(
+  crossdims_upper_triangular %>% filter(!dimension_x %in% c("string_length", "words")),
+  bayes_corrs %>% filter(!dimension_x %in% c("string_length", "words"))
+)
+ggsave("figs/FIG_study2-correlation-summary-bayes.pdf", width = 20, height = 13.5, units = "cm")
+```
+
+## Detail plots
+
+```{r}
+bayes_corrs_flipped <- bayes_corrs %>% 
+  rename(tmp = dimension_x) %>% 
+  rename(dimension_x = dimension_y) %>% 
+  rename(dimension_y = tmp)
+```
+
+```{r}
+plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "insight")
+ggsave("figs/FIG_study2-corr-rigour-insight.pdf", width = 15, height = 12, units = "cm")
+```
+
+
+```{r}
+plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "simple")
+ggsave("figs/FIG_study2-corr-rigour-simple.pdf", width = 15, height = 12, units = "cm")
+```
+
+```{r}
+plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "marks")
+ggsave("figs/FIG_study2-corr-rigour-marks.pdf", width = 15, height = 12, units = "cm")
+```
+
+```{r}
+plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "simple", "marks")
+ggsave("figs/FIG_study2-corr-simple-marks.pdf", width = 15, height = 12, units = "cm")
+```
+
+```{r}
+rigour_vs_marks <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "marks")
+rigour_vs_insight <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "insight")
+rigour_vs_simple <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs_flipped, "rigour", "simple") +
+  expand_limits(y = 2.5) # this avoids the text label overlapping data points
+simple_vs_marks <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs, "marks", "simple") + expand_limits(y = 2.5)
+
+library(patchwork)
+rigour_vs_insight + rigour_vs_simple + simple_vs_marks + 
+  plot_annotation(tag_levels = "a", tag_prefix = '(', tag_suffix = ')')
+ggsave("figs/FIG_study2-corr-details.pdf", width = 25, height = 10, units = "cm")
+
+rigour_vs_insight + rigour_vs_simple + 
+  plot_annotation(tag_levels = "a", tag_prefix = '(', tag_suffix = ')')
+ggsave("figs/FIG_study2-corr-details2.pdf", width = 20, height = 10, units = "cm")
+
+rigour_vs_marks + rigour_vs_insight + rigour_vs_simple + 
+  plot_annotation(tag_levels = "a", tag_prefix = '(', tag_suffix = ')')
+ggsave("figs/FIG_study2-corr-details3.pdf", width = 25, height = 10, units = "cm")
+```
+
+```{r}
+r_marks <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs, "marks", "rigour")
+r_insight <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs, "insight", "rigour")
+r_simple <- plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs, "simple", "rigour") +
+  expand_limits(y = 2.5) # this avoids the text label overlapping data points
+
+r_marks + r_insight + r_simple + 
+  plot_annotation(tag_levels = "a", tag_prefix = '(', tag_suffix = ')')
+ggsave("figs/FIG_study2-corr-rigour3ways.pdf", width = 25, height = 10, units = "cm")
+
+r_marks + r_simple + 
+  plot_annotation(tag_levels = "a", tag_prefix = '(', tag_suffix = ')')
+ggsave("figs/FIG_study2-corr-rigour2ways.pdf", width = 20, height = 10, units = "cm")
+```
+
+```{r}
+plot_two_dimensions_w_bayes(btm_estimates, bayes_corrs, "understanding", "rigour")
+```

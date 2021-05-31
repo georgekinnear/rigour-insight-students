@@ -50,6 +50,9 @@ Compute the split-halves reliability of each judging session. This is computatio
 
 Compute the correlations between dimensions in Study 1. This generates various figures, with PDF versions stored in the [`figs`](figs) directory.
 
+### [05-study2-analysis.Rmd](05-study2-analysis.Rmd) - [output](05-study2-analysis.md)
+
+Compute the correlations in Study 2 and generate figures.
 
 ## Output
 These files produce output in three places:
