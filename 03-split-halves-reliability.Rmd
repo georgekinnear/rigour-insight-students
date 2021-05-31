@@ -1,0 +1,280 @@
+---
+title: "Proof CJ: Split-halves reliability"
+author: "George Kinnear"
+date: "22/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/03-split-halves-reliability/')
+
+# Set preferred styling
+theme_set(theme_minimal())
+
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+
+# Tools for using the Bradley-Terry model
+library(sirt)
+source("functions_for_cj.R")
+
+# How many split half iterations to aim for?
+target_iters <- 1000
+```
+
+# Read data
+
+```{r echo=FALSE, message=FALSE}
+judgement_data <- read_csv("data-out/judgement_data.csv") %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted))
+
+num_judges <- judgement_data %>% 
+      select(study, dimension, JudgeID) %>% 
+      distinct() %>% 
+      count(study, dimension, name = "num_judges")
+
+judgement_data %>% 
+  group_by(study, dimension) %>% 
+  tally(name = "num_judgements") %>% 
+  left_join(
+    num_judges,
+    by = c("study", "dimension")
+  ) %>% 
+  basic_kable() %>% 
+  collapse_rows(columns = 1, valign = "top")
+
+# Prepare a nested version for later use
+judgements <- judgement_data %>% 
+  nest(csv_content = !c(study, dimension)) %>% 
+  left_join(
+    num_judges,
+    by = c("study", "dimension")
+  )
+```
+
+Note that the number of judgements made by each judge varies considerably:
+
+```{r}
+judgement_data %>% 
+  group_by(study, dimension, JudgeID) %>% 
+  tally() %>% 
+  ggplot(aes(x = dimension, y = n)) +
+  geom_jitter(width = 0.3, height = 0.05) +
+  facet_grid(~ study, scales = "free_x", space = "free_x") +
+  scale_x_discrete(position = "top") +
+  labs(title = "Number of judgements made by each judge", x = "", y = "") +
+  theme(strip.placement = "outside")
+
+```
+
+# Split-halves reliability
+
+We split the judges into two groups, and find the correlation between the scale scores produced by running each group's judgements through btm.
+
+We do this in two ways:
+
+1. genuine split-halves, i.e. dividing the judging group into two (N judges into groups of size floor(N/2) and ceiling(N/2))
+2. subsets of judges of a given size, i.e. selecting two distinct groups of judges from the pool of available judges, each group having the given size.
+
+We do this splitting many times (in this case `r target_iters` times), and look at the mean of correlation between the split judging groups across all those iterations. All the individual correlations are cached in `data-out/splithalf-iterations.csv` and `data-out/splits-iterations.csv`.
+
+## Split halves
+```{r splithalves, include=FALSE}
+# Check if there are any existing iterations on file
+if(file.exists("data-out/splithalf-iterations.csv")) {
+  splithalf_iters <- read_csv("data-out/splithalf-iterations.csv")
+  
+  existing_iters <- splithalf_iters %>% 
+    group_by(study, dimension) %>% 
+    summarise(n_iters = n()) %>% 
+    ungroup() %>% 
+    select(n_iters) %>% 
+    max()
+} else {
+  existing_iters = 0
+  splithalf_iters <- NULL
+}
+
+# Decide if any further iterations are needed
+iters_to_do = max(target_iters - existing_iters, 0)
+
+if(iters_to_do > 0) {
+  new_splithalves <- judgements %>%
+    mutate(
+      split_halves_info = map(
+        csv_content,
+        split_halves_irr_iterations,
+        iters = c((existing_iters + 1):target_iters)
+      )) %>%
+    select(-csv_content) %>%
+    unnest(cols = c(split_halves_info))
+  splithalf_iters <- splithalf_iters %>%
+    bind_rows(new_splithalves %>%
+                unnest(cols = c(split_half_corr)) %>%
+                select(study, dimension, iteration, nc1, nc2, cor))
+}
+```
+
+```{r splithalves-out}
+splithalf_iters %>% 
+  write_csv("data-out/splithalf-iterations.csv")
+
+splithalf_summary <- splithalf_iters %>%
+  group_by(study, dimension) %>%
+  summarise(
+    n_iters = n(),
+    corr_mean = mean(cor),
+    corr_median = median(cor),
+    corr_sd = sd(cor),
+    corr_se = corr_sd / sqrt(n()),
+    .groups = "drop"
+  ) %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted))
+
+judgements %>%
+  select(study, dimension, num_judges) %>% 
+  left_join(
+    splithalf_summary,
+    by = c("study", "dimension")
+  ) %>% 
+  basic_kable() %>% 
+  collapse_rows(columns = 1, valign = "top")
+
+splithalf_iters  %>%
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  ggplot(aes(x = 1, y = cor)) +
+  geom_violin() +
+  geom_pointrange(data = splithalf_summary, aes(x = 1, y = corr_mean, ymin = corr_mean-corr_se, ymax = corr_mean+corr_se)) +
+  # indicate a threshold, e.g. 0.7?
+  #geom_hline(yintercept = 0.7, colour = "grey") +
+  facet_grid(cols = vars(study, dimension)) +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "", y = "Split half correlation")
+```
+
+This shows the correlation coefficient obtained in each iteration (on the y-axis) plotted against the difference in the number of judgements in each group (on the x-axis). This shows that the spread of correlation coefficient values is quite similar even when there is a large difference in the number of judgements in each group.
+
+```{r}
+splithalf_iters  %>%
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  ggplot(aes(x = abs(nc1-nc2), y = cor)) +
+  geom_point() +
+  # indicate a threshold, e.g. 0.7?
+  #geom_hline(yintercept = 0.7, colour = "grey") +
+  facet_grid(cols = vars(study, dimension)) +
+  #theme(axis.text.x = element_blank()) +
+  labs(x = "Difference between the number of judgements in each split half", y = "Split half correlation")
+
+```
+
+## Equal-sized judge groups
+
+```{r}
+smallest_judge_group = judgements %>% 
+  select(num_judges) %>% 
+  min()
+
+split_size = floor(smallest_judge_group / 2)
+```
+
+Since the smallest judging group has `r smallest_judge_group` judges, we use **split judging groups of size `r split_size`**.
+
+```{r splits, include=FALSE}
+# Check if there are any existing iterations on file
+if(file.exists("data-out/splits-iterations.csv")) {
+  splithalf_iters <- read_csv("data-out/splits-iterations.csv")
+  
+  existing_iters <- splithalf_iters %>% 
+    group_by(study, dimension) %>% 
+    summarise(n_iters = n()) %>% 
+    ungroup() %>% 
+    select(n_iters) %>% 
+    max()
+} else {
+  existing_iters = 0
+  splithalf_iters <- NULL
+}
+
+# Decide if any further iterations are needed
+iters_to_do = max(target_iters - existing_iters, 0)
+
+if(iters_to_do > 0) {
+  new_splithalves <- judgements %>%
+    mutate(
+      split_halves_info = map(
+        csv_content,
+        split_halves_irr_iterations,
+        # Specify the judge group size
+        judge_group_size = split_size,
+        iters = c((existing_iters + 1):target_iters)
+      )) %>%
+    select(-csv_content) %>%
+    unnest(cols = c(split_halves_info))
+  splithalf_iters <- splithalf_iters %>%
+    bind_rows(new_splithalves %>%
+                unnest(cols = c(split_half_corr)) %>%
+                select(study, dimension, iteration, nc1, nc2, cor))
+}
+```
+
+```{r splits-out}
+splithalf_iters %>% 
+  write_csv("data-out/splits-iterations.csv")
+
+splithalf_summary <- splithalf_iters %>%
+  group_by(study, dimension) %>%
+  summarise(
+    n_iters = n(),
+    corr_mean = mean(cor),
+    corr_median = median(cor),
+    corr_sd = sd(cor),
+    corr_se = corr_sd / sqrt(n()),
+    .groups = "drop"
+  ) %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted))
+
+judgements %>%
+  select(study, dimension, num_judges) %>% 
+  left_join(
+    splithalf_summary,
+    by = c("study", "dimension")
+  ) %>% 
+  basic_kable() %>% 
+  collapse_rows(columns = 1, valign = "top")
+
+splithalf_iters  %>%
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  ggplot(aes(x = 1, y = cor)) +
+  geom_violin() +
+  geom_pointrange(data = splithalf_summary, aes(x = 1, y = corr_mean, ymin = corr_mean-corr_se, ymax = corr_mean+corr_se)) +
+  # indicate a threshold, e.g. 0.7?
+  #geom_hline(yintercept = 0.7, colour = "grey") +
+  facet_grid(cols = vars(study, dimension)) +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "", y = paste("Correlation between judging groups of size", split_size))
+
+
+splithalf_iters  %>%
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  ggplot(aes(x = abs(nc1-nc2), y = cor)) +
+  geom_point() +
+  # indicate a threshold, e.g. 0.7?
+  #geom_hline(yintercept = 0.7, colour = "grey") +
+  facet_grid(cols = vars(study, dimension)) +
+  #theme(axis.text.x = element_blank()) +
+  labs(x = "Difference between the number of judgements in each split half", y = "Split half correlation")
+```

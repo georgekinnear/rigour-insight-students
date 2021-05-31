@@ -42,6 +42,11 @@ Read the judgement data, fit the Bradley-Terry model, then save the resulting pa
 The output file also includes details of the SSR values reported in the paper.
 
 
+### [03-split-halves-reliability.Rmd](03-split-halves-reliability.Rmd) - [output](03-split-halves-reliability.md)
+
+Compute the split-halves reliability of each judging session. This is computationally intensive, so the results are cached in the files `data-out/splithalf-iterations.csv` and `data-out/splits-iterations.csv`, and only recomputed if those files are not present.
+
+
 ## Output
 These files produce output in three places:
 
