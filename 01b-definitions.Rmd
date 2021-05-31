@@ -1,0 +1,116 @@
+---
+title: 'Proof CJ: Responses to definition prompt'
+author: "George Kinnear"
+date: "22/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    df_print: paged
+  pdf_document:
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/01b-definitions/')
+
+library(tidyverse)
+
+# Tables
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+rmarkdown::html_document(df_print = knitr::kable)
+
+# Set preferred styling
+theme_set(theme_minimal())
+```
+
+
+```{r read-data, echo=FALSE, message = FALSE}
+# Find all the CSV files for this study
+study_files <- fs::dir_ls(path = "data-study-1", regexp = ".*.csv")
+study_files <- c(study_files, fs::dir_ls(path = "data-study-2", regexp = ".*.csv"))
+
+# Assemble the csv data into a large nested table
+# - this assumes filenames provide logical info in the form dimension_info.csv, where:
+#   * dimension - is the concept they were working with - one of the following:
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+#   * info - is the type of data in the csv, either judgements, definitions or judges details
+study_dfs <- tibble(path = study_files) %>%
+  separate(
+    path,
+    into = c("study", "filename"),
+    sep = "/",
+    remove = FALSE
+  ) %>%
+  mutate(
+    filename = str_replace(filename, ".csv", ""),
+    study = paste0("study", str_sub(study,-1))
+  ) %>% 
+  separate(filename, into = c("dimension", "info"), sep = "_") %>% 
+  mutate(
+    csv_content = purrr::map(path, read_csv)
+  ) %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  arrange(study, dimension)
+
+prompts <- read_csv("study-prompts.csv")
+
+judges <- study_dfs %>% 
+  filter(info == "judges") %>% 
+  select(study, dimension, csv_content) %>% 
+  unnest(cols = c(csv_content)) %>% 
+  janitor::clean_names()
+
+definition_data_all <- study_dfs %>% 
+  filter(info == "definitions") %>% 
+  select(study, dimension, csv_content) %>% 
+  unnest(cols = c(csv_content)) %>% 
+  janitor::clean_names() %>% 
+  mutate(full_name = paste(first_name, surname)) %>% 
+  left_join(judges %>% select(full_name, judge_id) %>% distinct(), by = "full_name")
+
+definition_data <- definition_data_all %>% 
+  # Filter to only those who consented to take part
+  filter(response_2 == "True") %>% 
+  # Select the anonymised data
+  select(study, dimension, judge_id, definition = response_1) %>% 
+  filter(definition != "-") %>% 
+  left_join(prompts)
+```
+
+
+# Definitions given by judges
+
+```{r results = "asis"}
+for(i in 1:nrow(prompts)) {
+  cond <- prompts[i,]
+  cat(paste("##", str_to_title(cond$study), cond$dimension))
+  cat("\n")
+  definition_data %>% 
+    filter(definition_prompt == cond$definition_prompt) %>% 
+    select(judge_id, definition) %>% 
+    kable(caption = cond$definition_prompt) %>% 
+    kable_styling(bootstrap_options = "striped", full_width = T) %>% 
+    print()
+  cat("\n")
+}
+
+```
+
+# Save data
+
+Filtered definitions written to `data-out/definition_data.csv`.
+
+```{r}
+definition_data %>% 
+  select(study, dimension, judge_id, definition) %>% 
+  write_csv("data-out/definition_data.csv")
+```

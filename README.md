@@ -5,7 +5,7 @@ Raw data is stored in these folders:
 * data-study-1
 * data-study-2
 
-These folders are not made publically available, as they contain non-anonymous data. However an anonymised copy is made available in the `data-out` folder -- see details below.
+These folders are not made publically available, as they contain non-anonymous data. However an anonymised copy is made available in the [`data-out`](data-out) folder -- see below for details.
 
 `proof-details.csv` in the main directory is also used in the analysis.
 
@@ -18,14 +18,22 @@ They also rely on two .R scripts (`functions_for_cj.R` and `functions_for_plotti
 
 This script reads in the .csv files downloaded from the Moodle CJ plugin, that give details of the CJ sessions. It anonymises the judgement data and stores this in:
 
-* [`data-out/judgement_data_all.csv`]
-* [`data-out/script_info.csv`]
+* [`data-out/judgement_data_all.csv`](data-out/judgement_data_all.csv)
+* [`data-out/script_info.csv`](data-out/script_info.csv)
 
 The output shows details of the number of judgements completed by each judge and the time spent.
 
 The script then filters the judgement data to remove nonserious judges, and stores this output in
 
 * [`data-out/judgement_data.csv`](data-out/judgement_data.csv)
+
+### [01b-definitions.Rmd](01b-definitions.Rmd) - [output](01b-definitions.md)
+
+Read the .csv files that contain students' written explanations of how they interpret the judging prompt, and print them out in a table.
+
+This script relies on raw data that is not included in the respository, however the output saved here gives all the data in anonymised form.
+
+
 
 ## Output
 These files produce output in three places:
