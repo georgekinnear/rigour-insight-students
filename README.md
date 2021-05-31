@@ -70,10 +70,6 @@ Compare the scores from Study 1 and Study 2.
 ## Output
 These files produce output in three places:
 
-* main directory - reports of the results as .html files
+* main directory - reports of the results as .md files
 * data-out folder - copies of processed data, that may be used in subsequent scripts in the series.
 * figs folder - PDF copies of the main figures.
-
-## What can be published?
-- All the .Rmd and .html files in the main directory
-- Everything in data-out
