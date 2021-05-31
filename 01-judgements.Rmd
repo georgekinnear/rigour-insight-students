@@ -1,0 +1,256 @@
+---
+title: 'Proof CJ: Judgement data'
+author: "George Kinnear"
+date: "22/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    df_print: paged
+  pdf_document:
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/01-judgements/')
+
+library(tidyverse)
+
+# Tables
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+rmarkdown::html_document(df_print = knitr::kable)
+
+# Set preferred styling
+theme_set(theme_minimal())
+```
+
+
+```{r read-data, echo=FALSE, message = FALSE}
+if(file.exists("data-out/judgement_data_all.csv") && file.exists("data-out/script_info.csv")) {
+  # Read the cached data
+  judgement_data_all <- read_csv("data-out/judgement_data_all.csv")
+  script_info <- read_csv("data-out/script_info.csv")
+  print("Data loaded from data-out folder")
+} else {
+  
+  # Gather, anonymise, and cache the data
+  
+  # Find all the CSV files for this study
+  study_files <- fs::dir_ls(path = "data-study-1", regexp = ".*.csv")
+  study_files <- c(study_files, fs::dir_ls(path = "data-study-2", regexp = ".*.csv"))
+  
+  # Assemble the csv data into a large nested table
+  # - this assumes filenames provide logical info in the form dimension_info.csv, where:
+  #   * dimension - is the concept they were working with - one of the following:
+  dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+  #   * info - is the type of data in the csv, either judgements, definitions or judges details
+  study_dfs <- tibble(path = study_files) %>%
+    separate(
+      path,
+      into = c("study", "filename"),
+      sep = "/",
+      remove = FALSE
+    ) %>%
+    mutate(
+      filename = str_replace(filename, ".csv", ""),
+      study = paste0("study", str_sub(study,-1))
+    ) %>% 
+    separate(filename, into = c("dimension", "info"), sep = "_") %>% 
+    mutate(
+      csv_content = purrr::map(path, read_csv)
+    ) %>% 
+    mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+    arrange(study, dimension)
+  
+  judgement_data_all <- study_dfs %>% 
+    filter(info == "judgements") %>% 
+    select(study, dimension, csv_content) %>% 
+    unnest(cols = c(csv_content))
+  
+  script_info <- study_dfs %>% 
+    filter(info == "scripts") %>% 
+    select(study, dimension, csv_content) %>% 
+    unnest(cols = c(csv_content))
+  
+  judgement_data_all %>% write_csv("data-out/judgement_data_all.csv")
+  script_info %>% write_csv("data-out/script_info.csv")
+}
+proof_names <- script_info %>% 
+  select(id = `Submission id`, proof = `Full name`)
+
+proof_names %>% write_csv("data-out/proof_names.csv")
+
+proof_details <- read_csv("proof-details.csv")
+```
+
+
+# Summary of the decision data
+
+## Judges summary
+
+
+```{r}
+judge_summary <- judgement_data_all %>% 
+  select(study, dimension, JudgeID) %>% 
+  group_by(study, dimension, JudgeID) %>% 
+  tally(name = "judgements_made") %>% 
+  group_by(study, dimension, judgements_made) %>% 
+  summarise(
+    num_judges = n(),
+    judges = paste0(JudgeID, collapse = ", "),
+    .groups = "drop"
+  )
+
+judge_summary %>% 
+  group_by(study, dimension) %>% 
+  tally(num_judges, name = "num_judges") %>% 
+  kable(booktabs = T) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>% 
+  collapse_rows(columns = 1, valign = "top")
+
+```
+
+## Judgements per judge
+
+```{r echo=FALSE, fig.height=5, fig.width=10}
+judgement_data_all %>%
+  select(study, dimension, JudgeID) %>%
+  group_by(study, dimension, JudgeID) %>%
+  tally(name = "judgements_made") %>%
+  group_by(study, dimension) %>%
+  arrange(-judgements_made) %>%
+  mutate(row_num = row_number()) %>%
+  ungroup() %>%
+  full_join(
+    judgement_data_all %>% select(study, dimension) %>% distinct() %>% crossing(tibble(row_num = c(1:50))),
+    by = c("study", "dimension", "row_num")
+  ) %>% 
+  mutate(judgements_made = replace_na(judgements_made, 0), JudgeID = replace_na(JudgeID, "")) %>% 
+  mutate(JudgeID = fct_reorder(as.factor(JudgeID), judgements_made)) %>% 
+  ggplot(aes(x = row_num, y = judgements_made)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  facet_wrap(facets = vars(study, dimension), scales = "free", nrow = 1)
+```
+
+```{r echo=FALSE, fig.height=5, fig.width=10}
+judgement_data_all %>%
+  select(study, dimension, JudgeID) %>%
+  group_by(study, dimension, JudgeID) %>%
+  tally(name = "judgements_made") %>%
+  ungroup() %>%
+  mutate(JudgeID = fct_reorder(as.factor(JudgeID), judgements_made)) %>% 
+  ggplot(aes(x = JudgeID, y = judgements_made)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  facet_wrap(facets = vars(study, dimension), scales = "free", nrow = 1)
+```
+
+
+## Time taken
+
+```{r echo=FALSE, warning=FALSE}
+judgement_data_all %>% 
+  ggplot(aes(x = TimeTaken)) +
+  geom_histogram(binwidth = 1) +
+  xlim(0,60) +
+  labs(title = "Histogram of times for each judgement", subtitle = "Trimmed at 60s")
+
+judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  summarise(median_TimeTaken = median(TimeTaken)) %>% 
+  ggplot(aes(x = median_TimeTaken)) +
+  geom_histogram(binwidth = 1) +
+  xlim(0,60) +
+  labs(title = "Histogram of median judgement time for each judge")
+```
+
+
+Median judgement times per study:
+
+```{r}
+judgement_data_all %>%
+  group_by(study) %>% 
+  summarise(median_TimeTaken = median(TimeTaken)) %>% 
+  basic_kable()
+```
+
+Filtering out nonserious judges, whose median judgement time is under 5 seconds.
+
+```{r warning=FALSE}
+judge_times <- judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  summarise(median_TimeTaken = median(TimeTaken)) %>% 
+  mutate(nonserious_judge = median_TimeTaken < 5)
+
+judge_times %>% 
+  janitor::tabyl(nonserious_judge) %>% 
+  basic_kable()
+
+judgement_data_all %>% 
+  left_join(judge_times, by = "JudgeID") %>% 
+  mutate(study_dim = paste(study, dimension)) %>% 
+  janitor::tabyl(study_dim, nonserious_judge) %>%
+  janitor::adorn_percentages("row") %>%
+  janitor::adorn_pct_formatting(digits = 2) %>%
+  janitor::adorn_ns() %>%
+  janitor::adorn_title(placement = "top", col_name = "Judgements to be discarded") %>% 
+  basic_kable()
+
+judgement_data <- judgement_data_all %>% 
+  left_join(judge_times, by = "JudgeID") %>% 
+  filter(nonserious_judge == FALSE) %>% 
+  select(-nonserious_judge, -median_TimeTaken)
+  
+judgement_data %>% 
+  left_join(judge_times, by = "JudgeID") %>% 
+  group_by(study, dimension, JudgeID, median_TimeTaken) %>% 
+  summarise(num_judgements = n(), .groups = "drop") %>% 
+  ggplot(aes(x=num_judgements, y = median_TimeTaken)) +
+  geom_point(position = "jitter", alpha = 0.5) +
+  facet_wrap(vars(study, dimension)) +
+  ylim(0,200)
+```
+
+
+
+## Summary of the filtered judgements
+
+```{r echo=FALSE}
+long_decisions <- judgement_data %>% 
+  pivot_longer(cols = c(Won, Lost), names_to = "side", values_to = "script")
+```
+
+```{r echo=FALSE}
+long_decisions %>% 
+  group_by(study, dimension, script) %>% 
+  summarise(
+    judgements = n(),
+    wins = sum(side=="Won"),
+    losses = sum(side=="Lost"),
+    .groups = "drop"
+  ) %>% 
+  left_join(proof_names, by = c("script" = "id")) %>% 
+  relocate(proof, .after = "script") %>% 
+  arrange(study, dimension, proof) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
+  collapse_rows(columns = 1:2, valign = "top")
+```
+
+# Save data
+
+Filtered judgement data written to `data-out/judgement_data.csv`.
+
+```{r}
+judgement_data %>% 
+  write_csv("data-out/judgement_data.csv")
+```

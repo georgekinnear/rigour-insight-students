@@ -1,0 +1,16 @@
+proof,proof_name,type,generalises,solves,words,string_length
+1,Experimental evidence,experimental,y,n,10,258
+2,Pictorial I (L-shaped),pictorial,n,y?,0,33
+3,Pictorial II (Pyramids),pictorial,n,y?,0,53
+4,Arithmetic progression,corollary,n,y?,27,258
+5,Reversed list,rearranging,n,y?,22,343
+6,Telescope,rearranging,n?,n,28,336
+7,Backwards reasoning,corollary,y,n,15,224
+8,Rearranging I,rearranging,y,y?,8,196
+9,Rearranging II,rearranging,n,y?,11,401
+10,Induction,method - induction,y,n,35,443
+11,Contradiction,method - contradiction,y,n,33,640
+12,Linear system,equations,y,y?,60,876
+13,Undetermined coefficients,equations,y,y?,14,435
+14,Induction (b),method - induction,y,n,9,248
+15,Pictorial II (b),pictorial,n,y?,37,299
