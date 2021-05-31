@@ -1,0 +1,182 @@
+---
+title: "Proof CJ: Reliability"
+author: "George Kinnear"
+date: "22/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/02-fitting-cj-model/')
+
+# Set preferred styling
+theme_set(theme_minimal())
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+
+# Tools for using the Bradley-Terry model
+library(sirt)
+source("functions_for_cj.R")
+```
+
+# Read data
+
+```{r echo=FALSE, message=FALSE}
+judgement_data <- read_csv("data-out/judgement_data.csv") %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted))
+
+judgement_data %>% 
+  group_by(study, dimension) %>% 
+  tally(name = "num_judgements") %>% 
+  basic_kable()
+
+proof_names <- read_csv("data-out/proof_names.csv")
+
+proof_details <- read_csv("proof-details.csv")
+```
+
+# Fit the Bradley-Terry model
+
+```{r include=FALSE}
+btm_results <- judgement_data %>% 
+  nest(csv_content = !c(study, dimension)) %>% 
+  mutate(
+    btm_stuff = map(csv_content, btm_for_cj)
+  ) %>% 
+  unnest(cols = c(btm_stuff))
+```
+
+### SSR
+```{r echo=FALSE}
+btm_results %>% 
+  filter(study == "study1") %>% 
+  select(dimension, N_A, N_C, ssr) %>% 
+  mutate(ssr = as.numeric(ssr)) %>% 
+  kable(
+    digits = 3,
+    col.names = c("Dimension", "Judges", "Judgements", "SSR"),
+    booktabs = T,
+    caption = "Study 1 reliability"
+    #format = "latex"
+  ) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+btm_results %>% 
+  filter(study == "study2") %>% 
+  select(dimension, N_A, N_C, ssr) %>% 
+  mutate(ssr = as.numeric(ssr)) %>% 
+  kable(
+    digits = 3,
+    col.names = c("Dimension", "Judges", "Judgements", "SSR"),
+    booktabs = T,
+    caption = "Study 2 reliability"
+    #format = "latex"
+  ) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+```{r}
+btm_results %>% 
+  filter(study == "study1") %>% 
+  select(dimension, judge_fits) %>% 
+  unnest(cols = c(judge_fits)) %>% 
+  janitor::tabyl(dimension, discard) %>%
+  kable(caption = "Study 1 misfitting judges") %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
+  add_header_above(c(" " = 1, "Misfitting judges" = 2))
+
+btm_results %>% 
+  filter(study == "study2") %>% 
+  select(dimension, judge_fits) %>% 
+  unnest(cols = c(judge_fits)) %>% 
+  janitor::tabyl(dimension, discard) %>%
+  kable(caption = "Study 2 misfitting judges") %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
+  add_header_above(c(" " = 1, "Misfitting judges" = 2))
+```
+
+```{r echo=FALSE}
+btm_estimates <- btm_results %>% 
+  select(study, dimension, btm_estimates) %>% 
+  unnest(cols = c(btm_estimates)) %>% 
+  left_join(proof_names, by = c("individual" = "id")) %>% 
+  relocate(proof, .after = "individual") %>% 
+  select(-id)
+
+btm_estimates %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
+  collapse_rows(columns = 1:2, valign = "top")
+```
+
+# Summary of BTM output
+
+```{r}
+btm_estimates %>% 
+  select(study, dimension, proof, theta) %>% 
+  unite(scale, study:dimension) %>% 
+  pivot_wider(
+    names_from = "scale",
+    values_from = theta
+  ) %>% 
+  kable(
+    digits = 3,
+    col.names = c("Proof", "rigour", "insight", dimensions_sorted),
+    booktabs = T,
+    caption = "BTM parameter estimates"
+    #format = "latex"
+  ) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>% 
+  add_header_above(c(" " = 1, "Study 1" = 2, "Study 2" = 5))
+
+all_details <- btm_estimates %>% 
+  select(study, dimension, proof, theta) %>% 
+  unite(scale, study:dimension) %>% 
+  pivot_wider(
+    names_from = "scale",
+    values_from = theta
+  ) %>% 
+  left_join(
+    proof_details %>% select(proof, proof_name, words, string_length),
+    by = "proof"
+  ) %>% 
+  relocate(proof, proof_name, words, string_length)
+
+all_details %>% 
+  mutate(proof = str_glue("{proof}. {proof_name}"), .keep = "unused") %>% 
+  kable(
+    digits = 3,
+    col.names = c("Proof", "words", "string length", "rigour", "insight", dimensions_sorted),
+    booktabs = T,
+    caption = "Proof details plus BTM parameter estimates"
+    #format = "latex"
+  ) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>% 
+  add_header_above(c(" " = 3, "Study 1" = 2, "Study 2" = 5))
+```
+
+The theta estimates, along with the standard errors for each theta, are written out to `data-out/btm_estimates.csv`.
+
+The details in the table above are written to `data-out/proofs_all_details.csv`.
+
+```{r}
+btm_estimates %>% 
+  select(study, dimension, proof, theta, se = se.theta) %>% 
+  write_csv("data-out/btm_estimates.csv")
+
+all_details %>% 
+  write_csv("data-out/proofs_all_details.csv")
+```

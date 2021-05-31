@@ -27,12 +27,19 @@ The script then filters the judgement data to remove nonserious judges, and stor
 
 * [`data-out/judgement_data.csv`](data-out/judgement_data.csv)
 
+
 ### [01b-definitions.Rmd](01b-definitions.Rmd) - [output](01b-definitions.md)
 
 Read the .csv files that contain students' written explanations of how they interpret the judging prompt, and print them out in a table.
 
 This script relies on raw data that is not included in the respository, however the output saved here gives all the data in anonymised form.
 
+
+### [02-fitting-cj-model.Rmd](02-fitting-cj-model.Rmd) - [output](02-fitting-cj-model.md)
+
+Read the judgement data, fit the Bradley-Terry model, then save the resulting parameter estimates to `data-out/btm_estimates.csv` and `data-out/proofs_all_details.csv`.
+
+The output file also includes details of the SSR values reported in the paper.
 
 
 ## Output
