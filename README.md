@@ -62,6 +62,10 @@ This was a first attempt at computing the correlations in Study 2. The computati
 
 Carry out factor analysis of the proof scores in Study 2.
 
+### [06-study1-vs-study2.Rmd](06-study1-vs-study2.Rmd) - [output](06-study1-vs-study2.md)
+
+Compare the scores from Study 1 and Study 2.
+
 
 ## Output
 These files produce output in three places:
