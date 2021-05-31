@@ -46,6 +46,10 @@ The output file also includes details of the SSR values reported in the paper.
 
 Compute the split-halves reliability of each judging session. This is computationally intensive, so the results are cached in the files `data-out/splithalf-iterations.csv` and `data-out/splits-iterations.csv`, and only recomputed if those files are not present.
 
+### [04-study1-analysis.Rmd](04-study1-analysis.Rmd) - [output](04-study1-analysis.md)
+
+Compute the correlations between dimensions in Study 1. This generates various figures, with PDF versions stored in the [`figs`](figs) directory.
+
 
 ## Output
 These files produce output in three places:
