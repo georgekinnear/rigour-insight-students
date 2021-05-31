@@ -1,0 +1,272 @@
+---
+title: "Proof CJ: Study 2 factor analysis"
+author: "George Kinnear"
+date: "25/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/05b-study2-factor-analysis/')
+
+# for plotting
+library(ggrepel)
+source("functions_for_plotting.R")
+theme_set(theme_minimal())
+library(patchwork)
+
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+
+# For the Bayesian stuff
+library(bayestestR)
+library(insight)
+library(BayesFactor)
+ci_width <- 0.95
+set.seed(22032021)
+
+# For the factor analysis
+library(parameters)
+library(see)
+library(psych)
+library(broom)  # for augment(), tidy()
+```
+
+# Data
+
+```{r echo=FALSE, fig.height=1, fig.width=8, message=FALSE}
+btm_estimates <- read_csv("data-out/btm_estimates.csv") %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  filter(study == "study2") %>% 
+  select(-study)
+
+proof_details <- read_csv("proof-details.csv")
+
+params <- btm_estimates %>% 
+  select(proof, dimension, theta) %>% 
+  pivot_wider(
+    names_from = dimension,
+    values_from = theta
+  )
+
+params %>% 
+  basic_kable()
+```
+
+```{r, results = "asis"}
+params %>% 
+  select(-proof) %>% 
+  check_factorstructure()
+
+data <- params %>% 
+  select(-proof)
+```
+
+```{r, results = "asis"}
+n <- n_factors(data)
+n
+```
+```{r}
+plot(n)
+summary(n) %>% basic_kable()
+n %>% tibble() %>% basic_kable()
+```
+
+```{r, results = "asis"}
+fa.parallel(data, fa="fa", fm="ml")
+```
+
+
+# Using `stats::factanal`
+
+```{r}
+fitfact <- factanal(data, 2, rotation="varimax")
+print(fitfact, digits=3, cutoff=.3, sort=TRUE)
+```
+
+```{r}
+load <- data.frame(fitfact$loadings[,]) %>%
+  rownames_to_column("dimension")
+
+load %>%
+  basic_kable()
+
+load %>%
+  ggplot(aes(x = Factor1, y = Factor2)) +
+  geom_point() +
+  geom_text_repel(aes(label = dimension)) +
+  expand_limits(x = c(0,1), y = c(0,1)) +
+  labs(x = "Factor 1", y = "Factor 2")
+```
+
+
+```{r}
+fitfact <- factanal(data, 1, rotation="varimax")
+print(fitfact, digits=3, cutoff=.3, sort=TRUE)
+```
+
+```{r}
+load <- data.frame(fitfact$loadings[,]) %>%
+  rownames_to_column("dimension") %>% 
+  janitor::clean_names()
+
+load %>%
+  basic_kable()
+
+load %>%
+  ggplot(aes(x = fitfact_loadings, y = 0)) +
+  geom_point() +
+  geom_text_repel(aes(label = dimension)) +
+  expand_limits(x = c(0,1), y = c(0)) +
+  labs(x = "Factor 1")
+```
+
+# Using the `psych` package
+
+## 1 factor
+
+```{r warning=FALSE, results = "asis"}
+efa1 <- psych::fa(data, nfactors = 1, rotate = "varimax") 
+efa1 %>%
+  model_parameters(sort = TRUE, threshold = 0.4) %>% 
+  display(digits = 3)
+```
+
+## 2 factors
+
+```{r warning=FALSE, results="asis"}
+efa2 <- psych::fa(data, nfactors = 2, rotate = "varimax") 
+efa2 %>%
+  model_parameters(sort = TRUE, threshold = 0.4) %>% 
+  display(digits = 3)
+```
+
+```{r}
+load <- efa2 %>%
+  model_parameters(sort = TRUE, threshold = 0) %>% 
+  janitor::clean_names()
+
+load %>%
+  basic_kable()
+
+# Used to produce the table in the paper
+load %>%
+  select(Dimension = variable, `Factor 1` = mr1, `Factor 2` = mr2) %>% 
+  arrange(-abs(`Factor 1`)) %>% 
+  #mutate(across(contains("Factor"), ~ ifelse(abs(.) > 0.4, round(., digits = 3), "-"))) %>% 
+  mutate(
+    across(starts_with("Factor"),
+    ~ cell_spec(round(., digits = 3), "latex", bold = if_else(abs(.) > 0.4, T, F))
+    )
+  ) %>% 
+  kable(booktabs = T, escape = F, format = "latex")
+
+load %>%
+  ggplot(aes(x = mr1, y = mr2)) +
+  geom_point() +
+  geom_text_repel(aes(label = variable)) +
+  expand_limits(x = c(0,1), y = c(0)) +
+  labs(x = "Factor 1", y = "Factor 2")
+```
+
+Score for each proof on the two factors:
+
+```{r warning=FALSE}
+proof_scores <- predict(efa2 %>%
+  model_parameters(sort = TRUE, threshold = 0.4), names = c("F1", "F2")) %>% 
+  rownames_to_column("proof")
+
+proof_scores %>% 
+  basic_kable()
+
+proof_scores %>%
+  ggplot(aes(F1, F2)) +
+  geom_point() +
+  geom_text_repel(aes(label = proof))
+```
+
+# PCA
+
+https://wilkelab.org/SDS375/slides/dimension-reduction-1.html
+
+```{r}
+pca_fit <- data %>% 
+  scale() %>% 
+  prcomp()
+```
+
+```{r}
+arrow_style <- arrow(
+  angle = 20, length = grid::unit(8, "pt"),
+  ends = "first", type = "closed"
+)
+pca_fit %>%
+  # extract rotation matrix
+  tidy(matrix = "rotation") %>%
+  pivot_wider(
+    names_from = "PC", values_from = "value",
+    names_prefix = "PC"
+  ) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_segment(
+    xend = 0, yend = 0,
+    arrow = arrow_style
+  ) +
+  geom_text(aes(label = column), hjust = -0.1) +
+  xlim(-0.1, 1) + ylim(-0.75, 0.75) + 
+  coord_fixed()
+```
+
+```{r}
+pca_fit %>%
+  # extract eigenvalues
+  tidy(matrix = "eigenvalues") %>%
+  ggplot(aes(PC, percent)) + 
+  geom_col() + 
+  scale_x_continuous(
+    # create one axis tick per PC
+    breaks = 1:6
+  ) +
+  scale_y_continuous(
+    name = "variance explained",
+    # format y axis ticks as percent values
+    label = scales::label_percent(accuracy = 1)
+  )
+
+pca_fit %>%
+  # extract eigenvalues
+  tidy(matrix = "eigenvalues") %>% 
+  select(PC, percent, cumulative) %>% 
+  basic_kable()
+```
+
+Location of the proofs on these principal components:
+
+```{r}
+pca_fit %>%
+  # add PCs to the original dataset
+  augment(params) %>%
+  rename_with(~ str_remove(., ".fitted")) %>% 
+  ggplot(aes(PC1, PC2)) +
+  geom_point() +
+  geom_text_repel(aes(label = proof))
+```
+
+Conjecture:
+
+* PC1 is "convincingness" - 10 (induction) is the most convincing, while 3 (pictorial II), 13 (undetermined coeffs) and 1 (experimental evidence) are least.
+
+* PC2 is "formality" - 10, 11, 12, 13 are all high on that and they are all the most formally written, while 1 and 2 are much more informal.

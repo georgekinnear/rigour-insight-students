@@ -54,6 +54,11 @@ Compute the correlations between dimensions in Study 1. This generates various f
 
 Compute the correlations in Study 2 and generate figures.
 
+### [05b-study2-factor-analysis.Rmd](05b-study2-factor-analysis.Rmd) - [output](05b-study2-factor-analysis.md)
+
+Carry out factor analysis of the proof scores in Study 2.
+
+
 ## Output
 These files produce output in three places:
 
