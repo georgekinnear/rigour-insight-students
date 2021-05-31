@@ -1,0 +1,123 @@
+---
+title: "Proof CJ: Study 2 correlations"
+author: "George Kinnear"
+date: "25/03/2021"
+always_allow_html: true
+output:
+  github_document:
+    html_preview: false
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path='figs-web/05b-study2-correlations/')
+
+# for plotting
+library(ggrepel)
+source("functions_for_plotting.R")
+theme_set(theme_minimal())
+library(patchwork)
+
+library(knitr)
+library(kableExtra)
+basic_kable = function(df) {
+  df %>% 
+    kable() %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
+}
+
+dimensions_sorted <- c("rigour", "insight", "simple", "understanding", "marks")
+
+# For the Bayesian stuff
+library(bayestestR)
+library(insight)
+library(BayesFactor)
+ci_width <- 0.95
+set.seed(22032021)
+```
+
+```{r echo=FALSE, fig.height=1, fig.width=8, message=FALSE}
+btm_estimates <- read_csv("data-out/btm_estimates.csv") %>% 
+  mutate(dimension = fct_relevel(dimension, dimensions_sorted)) %>% 
+  filter(study == "study2") %>% 
+  select(-study)
+
+proof_details <- read_csv("proof-details.csv")
+```
+
+# Psych
+
+```{r}
+cor_ci <- btm_estimates %>% 
+  select(proof, dimension, theta) %>% 
+  pivot_wider(
+    names_from = "dimension",
+    values_from = c("theta")
+  ) %>% 
+  select(-proof) %>%
+  psych::corCi()
+
+cor_ci$ci %>% 
+  as_tibble(rownames = "corr") %>% 
+  arrange(p)
+
+plot(cor_ci, diag = FALSE)
+
+psych::cor.plot.upperLowerCi(cor_ci)
+```
+
+# Corrplot
+
+These plots show the sample Pearson's $r$:
+
+```{r}
+library(corrplot)
+
+thetas_table <- btm_estimates %>% 
+  select(dimension, proof, theta) %>% 
+  pivot_wider(
+    names_from = dimension,
+    values_from = theta
+  ) %>% 
+  select(-proof)
+
+M <- cor(thetas_table)
+
+corrplot(M, type="upper", order="hclust", tl.col="black", tl.srt=45)
+```
+
+Here we use frequentist $p$-values to determine significant correlations. Since there are 10 correlation tests being carried out, we use a Bonferroni-adjusted significance level of $0.05/10=0.005$ for the tests. Only the significant ones are shaded.
+
+```{r}
+cor.mtest <- function(mat, ...) {
+    mat <- as.matrix(mat)
+    n <- ncol(mat)
+    p.mat<- matrix(NA, n, n)
+    diag(p.mat) <- 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp <- cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+# matrix of the p-value of the correlation
+p.mat <- cor.mtest(thetas_table)
+
+corrplot(M, type="upper",
+         #method = "ellipse",
+         #order="hclust",
+         order = "AOE",
+         tl.col="black", tl.srt=0, 
+         addCoef.col = "black", # Add coefficient of correlation
+         diag=FALSE,
+         p.mat = p.mat, sig.level = 0.005, # testing 10 correlations, so use alpha = 0.05 / 10
+         insig = "blank"
+         )
+
+```
