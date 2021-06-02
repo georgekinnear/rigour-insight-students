@@ -14,6 +14,10 @@ Data and analysis code for the project on insight vs rigour.
 
 This project is licensed under the terms of the [MIT license](LICENSE.md).
 
+Citation for this repository:
+
+> Kinnear, G. (2021). georgekinnear/rigour-insight-students: Release of data and code used manuscript (Version 1.0). Zenodo. http://doi.org/10.5281/zenodo.4893915
+
 ## Data
 Raw data is stored in these folders:
 * data-study-1
