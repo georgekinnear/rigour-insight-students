@@ -12,6 +12,8 @@ Data and analysis code for the project on insight vs rigour.
 > Second, students may not have developed an aesthetic sense in which they appreciate insight in ways which are regularly discussed by mathematics educators.
 > Lastly, insight may not be a coherent and well-defined construct after all.
 
+This project is licensed under the terms of the [MIT license](LICENSE.md).
+
 ## Data
 Raw data is stored in these folders:
 * data-study-1
