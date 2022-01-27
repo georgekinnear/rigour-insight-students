@@ -173,6 +173,47 @@ judgement_data_all %>%
   labs(title = "Histogram of median judgement time for each judge")
 ```
 
+Judges became progressively quicker at making decisions as judging went on:
+
+```{r}
+judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  mutate(judgement_num = row_number()) %>% 
+  group_by(judgement_num) %>% 
+  summarise(
+    mean = mean(TimeTaken),
+    median = median(TimeTaken)
+  )
+
+judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  mutate(judgement_num = row_number()) %>% 
+  mutate(judgement_num = as.factor(judgement_num)) %>% 
+  ggplot(aes(x = judgement_num, y = TimeTaken)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0, 120))
+```
+
+By study:
+
+```{r}
+judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  mutate(judgement_num = row_number()) %>% 
+  group_by(study, judgement_num) %>% 
+  summarise(
+    mean = mean(TimeTaken),
+    median = median(TimeTaken)
+  )
+
+judgement_data_all %>% 
+  group_by(JudgeID) %>% 
+  mutate(judgement_num = row_number()) %>% 
+  mutate(judgement_num = as.factor(judgement_num)) %>% 
+  ggplot(aes(x = judgement_num, y = TimeTaken, fill = study)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0, 120))
+```
 
 Median judgement times per study:
 

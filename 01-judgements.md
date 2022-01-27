@@ -177,6 +177,48 @@ understanding
 
 ![](figs-web/01-judgements/unnamed-chunk-4-1.png)<!-- -->![](figs-web/01-judgements/unnamed-chunk-4-2.png)<!-- -->
 
+Judges became progressively quicker at making decisions as judging went
+on:
+
+    ## # A tibble: 25 x 3
+    ##    judgement_num  mean median
+    ##            <int> <dbl>  <dbl>
+    ##  1             1  92.1     55
+    ##  2             2  66.8     34
+    ##  3             3  76.8     34
+    ##  4             4  74.4     33
+    ##  5             5  70.2     24
+    ##  6             6  73.2     22
+    ##  7             7  85.0     20
+    ##  8             8  40.5     18
+    ##  9             9  44.0     13
+    ## 10            10  30.8      8
+    ## # ... with 15 more rows
+
+![](figs-web/01-judgements/unnamed-chunk-5-1.png)<!-- -->
+
+By study:
+
+    ## `summarise()` has grouped output by 'study'. You can override using the `.groups` argument.
+
+    ## # A tibble: 50 x 4
+    ## # Groups:   study [2]
+    ##    study  judgement_num  mean median
+    ##    <chr>          <int> <dbl>  <dbl>
+    ##  1 study1             1  93.7   49  
+    ##  2 study1             2  30.9   13  
+    ##  3 study1             3  67.3   12  
+    ##  4 study1             4  40.5   22  
+    ##  5 study1             5  94.5   17.5
+    ##  6 study1             6  47.6   12  
+    ##  7 study1             7  68.2   11  
+    ##  8 study1             8  50.2   18.5
+    ##  9 study1             9  52.2   27  
+    ## 10 study1            10  71.1    9  
+    ## # ... with 40 more rows
+
+![](figs-web/01-judgements/unnamed-chunk-6-1.png)<!-- -->
+
 Median judgement times per study:
 
 <table class="table table-striped" style="width: auto !important; margin-left: auto; margin-right: auto;">
@@ -526,7 +568,7 @@ study2 understanding
 
 </table>
 
-![](figs-web/01-judgements/unnamed-chunk-6-1.png)<!-- -->
+![](figs-web/01-judgements/unnamed-chunk-8-1.png)<!-- -->
 
 ## Summary of the filtered judgements
 
