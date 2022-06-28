@@ -2695,6 +2695,11 @@ understanding
 ## Total time taken per serious judge in study 2
 
     ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    ##     5.0   314.0   537.0   868.9   866.0 10414.0
+
+    ## [1] 1239.416
+
+    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
     ##     5.0   314.0   537.0   754.7   866.0  4988.0
 
     ## [1] 756.7849

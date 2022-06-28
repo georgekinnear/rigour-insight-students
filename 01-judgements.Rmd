@@ -286,6 +286,18 @@ long_decisions %>%
 
 ```{r warning=FALSE}
 
+judgement_times_s1 <- judgement_data %>% 
+  filter(study == "study2") 
+
+judgement_times_s1  <- aggregate(x = judgement_times_s1$TimeTaken,  # Specify data column
+               by = list(judgement_times_s1$JudgeID),               # Specify group indicator
+               FUN = sum)
+
+colnames(judgement_times_s1) <- c("JudgeID","TotalTimeTaken")
+
+summary(judgement_times_s1$TotalTimeTaken)
+sd(judgement_times_s1$TotalTimeTaken)
+
 judgement_times_s2 <- judgement_data %>% 
   filter(study == "study2") %>% 
   filter(TimeTaken <= 1800)
