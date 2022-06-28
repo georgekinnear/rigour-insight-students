@@ -91,11 +91,9 @@ proof_names %>% write_csv("data-out/proof_names.csv")
 proof_details <- read_csv("proof-details.csv")
 ```
 
-
 # Summary of the decision data
 
 ## Judges summary
-
 
 ```{r}
 judge_summary <- judgement_data_all %>% 
@@ -153,7 +151,6 @@ judgement_data_all %>%
   coord_flip() +
   facet_wrap(facets = vars(study, dimension), scales = "free", nrow = 1)
 ```
-
 
 ## Time taken
 
@@ -261,8 +258,6 @@ judgement_data %>%
   ylim(0,200)
 ```
 
-
-
 ## Summary of the filtered judgements
 
 ```{r echo=FALSE}
@@ -285,6 +280,30 @@ long_decisions %>%
   kable() %>% 
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
   collapse_rows(columns = 1:2, valign = "top")
+```
+
+## Total time taken per serious judge in study 2
+
+```{r warning=FALSE}
+
+judgement_times_s2 <- judgement_data %>% 
+  filter(study == "study2") %>% 
+  filter(TimeTaken <= 1800)
+
+judgement_times_s2  <- aggregate(x = judgement_times_s2$TimeTaken,  # Specify data column
+               by = list(judgement_times_s2$JudgeID),               # Specify group indicator
+               FUN = sum)
+
+colnames(judgement_times_s2) <- c("JudgeID","TotalTimeTaken")
+
+summary(judgement_times_s2$TotalTimeTaken)
+sd(judgement_times_s2$TotalTimeTaken)
+
+judgement_times_s2 %>% 
+  ggplot(aes(x = TotalTimeTaken)) +
+  geom_histogram(binwidth = 50) +
+  xlim(0,2500) +
+  labs(title = "Histogram of total judgement time for judges in study 2")
 ```
 
 # Save data
